@@ -1,20 +1,17 @@
-require('dotenv').config(); // โหลดค่า .env
+require('dotenv').config();
 
 const express = require('express');
 const line = require('@line/bot-sdk');
 
 const app = express();
 
-// ตั้งค่าจาก environment
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
 };
 
-// สร้าง LINE client
 const client = new line.Client(config);
 
-// ✅ ต้องวาง line.middleware ก่อน express.json() เพื่อให้ LINE SDK อ่าน raw body ได้
 app.post('/webhook', line.middleware(config), (req, res) => {
   console.log('Webhook called');
 
@@ -27,10 +24,8 @@ app.post('/webhook', line.middleware(config), (req, res) => {
     });
 });
 
-// ✅ วาง express.json() หลังจาก webhook แล้ว
 app.use(express.json());
 
-// ฟังก์ชันคำนวณราคา
 function calculatePrice(text) {
   const adultMatch = text.match(/ผู้ใหญ่\s*(\d+)/);
   const childMatch = text.match(/เด็ก\s*(\d+)/);
@@ -43,7 +38,6 @@ function calculatePrice(text) {
   return `ผู้ใหญ่ ${adultCount} คน เด็ก ${childCount} คน\nรวมทั้งหมด ${total} บาท`;
 }
 
-// ฟังก์ชันช่วยตอบข้อความ
 function replyText(replyToken, text) {
   return client.replyMessage(replyToken, {
     type: 'text',
@@ -51,7 +45,6 @@ function replyText(replyToken, text) {
   });
 }
 
-// ฟังก์ชันจัดการข้อความ
 function handleEvent(event) {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
@@ -61,7 +54,6 @@ function handleEvent(event) {
 
   const text = event.message.text.toLowerCase();
 
-  // คีย์เวิร์ดกลุ่มต่าง ๆ
   const paymentKeywords = ['ชำระ', 'จ่าย', 'โอน', 'วิธีชำระ', 'โอนยังไง', 'จ่ายผ่าน', 'ชำระเงิน'];
   const generalInquiryKeywords = ['สอบถาม', 'ถาม', 'ช่วย', 'สวัสดี', 'hello', 'hi', 'สวัสดีค่ะ', 'สวัสดีครับ'];
   const bookingKeywords = ['จอง', 'ซื้อบัตร', 'ซื้อตั๋ว', 'ช่องทางซื้อ', 'ซื้อตั๋วออนไลน์'];
@@ -76,38 +68,35 @@ function handleEvent(event) {
   const aboutPlaceKeywords = ['คืออะไร', 'ที่เที่ยว', 'รายละเอียด', 'ที่นี่คือ', 'ข้อมูลสถานที่'];
   const roomKeywords = ['ห้องพัก', 'ที่พัก', 'นอน', 'พัก', 'ที่พักผ่อน'];
 
-  // คำถามพิเศษพร้อมคำตอบ
   const extraQuestions = [
     {
       keywords: ['เสียตรงนี้ต้องเสียเพิ่มไหม', 'ต้องเสียเพิ่มไหม', 'เสียเพิ่มไหม', 'มีค่าใช้จ่ายเพิ่มไหม','จ่ายเพิ่ม', 'จ่ายเพิ่มไหม','เสียเพิ่ม'],
-      reply: 'ไม่ต้องเสียเพิ่ม'
+      reply: 'ไม่มีค่าใช้จ่ายเพิ่มเติมค่ะ'
     },
     {
       keywords: ['โปรนี้มีถึงเมื่อไหร่', 'โปรหมดเมื่อไหร่', 'โปรสิ้นสุดเมื่อไหร่', 'โปรนี้สิ้นสุดเมื่อไหร่', 'โปรโมชั่นหมดเมื่อไหร่'],
-      reply: 'ยังไม่มีกำหนดสิ้นสุด'
+      reply: 'โปรโมชั่นนี้ยังไม่มีวันสิ้นสุดค่ะ'
     },
     {
       keywords: ['สมัครงานได้ไหม', 'รับสมัครงานไหม', 'สมัครงานได้ที่ไหน', 'อยากสมัครงาน', 'มีงานทำไหม'],
-      reply: 'สมัครงานได้ที่สยามชัยหาดทรายขาว'
+      reply: 'สามารถสมัครงานได้ที่สยามชัยหาดทรายขาวค่ะ'
     },
     {
       keywords: ['จำกัดจำนวนไหม', 'มีจำกัดจำนวนไหม', 'จำนวนจำกัดไหม', 'จำกัดผู้เข้าร่วมไหม', 'จำนวนคนจำกัดไหม'],
-      reply: 'ไม่จำกัดจำนวน'
+      reply: 'ลูกค้าสามารถเข้ามาได้โดยไม่จำกัดจำนวนค่ะ'
     },
     {
       keywords: ['จุดปฐมพยาบาล', 'มีจุดปฐมพยาบาลไหม', 'ปฐมพยาบาล', 'สถานีปฐมพยาบาล', 'ที่ปฐมพยาบาล'],
-      reply: 'มีจุดปฐมพยาบาล ติดต่อที่ทางเข้าได้เลย'
+      reply: 'มีจุดปฐมพยาบาลให้บริการที่บริเวณทางเข้า ลูกค้าสามารถติดต่อเจ้าหน้าที่ได้เลยค่ะ'
     }
   ];
 
-  // เช็คคำถามพิเศษก่อน
   for (const q of extraQuestions) {
     if (q.keywords.some(k => text.includes(k))) {
       return replyText(event.replyToken, q.reply);
     }
   }
 
-  // เช็คคำถามกลุ่มหลัก
   if (paymentKeywords.some(k => text.includes(k))) {
     return client.replyMessage(event.replyToken, {
       type: 'image',
@@ -117,56 +106,53 @@ function handleEvent(event) {
   }
 
   if (bookingKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สวัสดี คุณสามารถซื้อบัตรใน LINE นี้ได้ แจ้งจำนวนผู้ใหญ่และเด็กที่มาเที่ยวได้เลย');
+    return replyText(event.replyToken, 'คุณสามารถซื้อบัตรผ่านทาง LINE นี้ได้เลยค่ะ กรุณาแจ้งจำนวนผู้ใหญ่และเด็กที่ต้องการจองค่ะ');
   }
 
   if (openingKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'เปิดให้บริการตั้งแต่เวลา 08.00 - 00.00');
+    return replyText(event.replyToken, 'เปิดให้บริการทุกวัน ตั้งแต่เวลา 08.00 - 00.00 น. ค่ะ');
   }
 
   if (parkingKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'มีที่จอดรถฟรีสำหรับลูกค้าทุกท่าน');
+    return replyText(event.replyToken, 'ทางเรามีที่จอดรถฟรีสำหรับลูกค้าทุกท่านค่ะ');
   }
 
   if (priceKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'ปกติค่าเข้าสยามชัยหาดทรายขาว 40 บาท เด็กต่ำกว่า 10 ขวบและผู้สูงอายุฟรี\nทะเลนครปฐม ผู้ใหญ่ 120 บาท เด็กต่ำกว่า 10 ขวบ 60 บาท');
+    return replyText(event.replyToken, 'ค่าเข้าสยามชัยหาดทรายขาวสำหรับผู้ใหญ่ 40 บาท เด็กต่ำกว่า 10 ปี และผู้สูงอายุ เข้าฟรีค่ะ\nส่วนโซนทะเลนครปฐม ผู้ใหญ่ 120 บาท เด็ก 60 บาทค่ะ');
   }
 
   if (locationKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สยามชัยหาดทรายขาวตั้งอยู่ที่นครปฐม กดตามลิ้งค์นี้ได้เลย https://g.co/kgs/k1Zv8V2');
+    return replyText(event.replyToken, 'สยามชัยหาดทรายขาวตั้งอยู่ที่จังหวัดนครปฐมค่ะ สามารถกดดูแผนที่ได้ที่ https://g.co/kgs/k1Zv8V2');
   }
 
   if (swimKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สามารถเล่นน้ำได้ถึงเวลา 18.00 น. หากอยากเล่นน้ำต่อสามารถเล่นที่หลังร้านอาหารสามชัยได้ถึง 21.00 น.');
+    return replyText(event.replyToken, 'สามารถเล่นน้ำได้ถึงเวลา 18.00 น. ค่ะ หากต้องการเล่นน้ำเพิ่มเติมสามารถเล่นบริเวณหลังร้านอาหารสามชัยได้ถึง 21.00 น. ค่ะ');
   }
 
   if (foodKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สามารถนำอาหารเข้ามาได้ ยกเว้นเครื่องดื่ม ซึ่งไม่อนุญาตให้นำเข้ามา');
+    return replyText(event.replyToken, 'สามารถนำอาหารเข้ามาได้ค่ะ ยกเว้นเครื่องดื่มแอลกอฮอล์ซึ่งไม่อนุญาตให้นำเข้ามาค่ะ');
   }
 
   if (concertKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'ลูกค้าสามารถเช็คกิจกรรมหรือคอนเสิร์ตได้ที่เพจ "สยามชัยหาดทรายขาว" บน Facebook');
+    return replyText(event.replyToken, 'ลูกค้าสามารถติดตามกิจกรรมและคอนเสิร์ตได้ที่เพจ Facebook: "สยามชัยหาดทรายขาว" ค่ะ');
   }
 
   if (petKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สามารถนำสัตว์เลี้ยงเข้ามาได้ โดยมีค่าบริการเท่ากับผู้ใหญ่ และไม่อนุญาตให้สัตว์เลี้ยงลงเล่นน้ำเด็ดขาด เพื่อความสะดวกของผู้ใช้บริการท่านอื่น');
+    return replyText(event.replyToken, 'สามารถนำสัตว์เลี้ยงเข้ามาได้ค่ะ โดยมีค่าบริการเท่ากับผู้ใหญ่ และกรุณาอย่าให้สัตว์เลี้ยงลงเล่นน้ำนะคะ');
   }
 
   if (aboutPlaceKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สยามชัยหาดทรายขาวเป็นสถานที่ท่องเที่ยวและพักผ่อนในจังหวัดนครปฐม มีบริการหลากหลายสำหรับนักท่องเที่ยว');
+    return replyText(event.replyToken, 'สยามชัยหาดทรายขาวเป็นสถานที่พักผ่อนหย่อนใจในจังหวัดนครปฐม มีโซนเล่นน้ำ ร้านอาหาร และกิจกรรมสำหรับครอบครัวค่ะ');
   }
 
-  // กรณีไม่รู้คำตอบ ลองเช็คว่าผู้ใช้ถามเรื่องคำนวณราคาไหม
   const priceCalcResult = calculatePrice(event.message.text);
   if (priceCalcResult) {
-    return replyText(event.replyToken, priceCalcResult);
+    return replyText(event.replyToken, priceCalcResult + '\nหากต้องการจอง กรุณาแจ้งเพื่อดำเนินการต่อได้เลยค่ะ');
   }
 
-  // ตอบกลับข้อความพื้นฐานถ้าไม่มี keyword ตรงกัน
-  return replyText(event.replyToken, 'ขอโทษครับ ผมไม่เข้าใจคำถาม กรุณาถามใหม่อีกครั้ง');
+  return replyText(event.replyToken, 'ขออภัยค่ะ ไม่สามารถตอบคำถามนี้ได้ในขณะนี้ หากต้องการสอบถามเพิ่มเติม กรุณาระบุคำถามให้ชัดเจนขึ้นนะคะ');
 }
 
-// ตั้งพอร์ตและเริ่มเซิร์ฟเวอร์
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
