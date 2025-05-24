@@ -130,7 +130,7 @@ function handleEvent(event) {
   }
 
   if (foodKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สามารถนำอาหารเข้ามาได้ค่ะ ยกเว้นเครื่องดื่มแอลกอฮอล์ซึ่งไม่อนุญาตให้นำเข้ามาค่ะ');
+    return replyText(event.replyToken, 'สามารถนำอาหารเข้ามาได้ค่ะ ยกเว้นเครื่องดื่มซึ่งไม่อนุญาตให้นำเข้ามาค่ะ');
   }
 
   if (concertKeywords.some(k => text.includes(k))) {
