@@ -11,6 +11,9 @@ const config = {
   channelSecret: process.env.CHANNEL_SECRET
 };
 
+// สร้าง LINE client
+const client = new line.Client(config);
+
 // ✅ ต้องวาง line.middleware ก่อน express.json() เพื่อให้ LINE SDK อ่าน raw body ได้
 app.post('/webhook', line.middleware(config), (req, res) => {
   console.log('Webhook called');
@@ -27,21 +30,25 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 // ✅ วาง express.json() หลังจาก webhook แล้ว
 app.use(express.json());
 
-// สร้าง LINE client
-const client = new line.Client(config);
-
 // ฟังก์ชันคำนวณราคา
 function calculatePrice(text) {
   const adultMatch = text.match(/ผู้ใหญ่\s*(\d+)/);
   const childMatch = text.match(/เด็ก\s*(\d+)/);
   if (!adultMatch && !childMatch) {
-    // ถ้าไม่มีแจ้งจำนวนผู้ใหญ่หรือเด็กเลย คืนค่า null เพื่อบอกว่าไม่ต้องคำนวณ
     return null;
   }
   const adultCount = adultMatch ? parseInt(adultMatch[1]) : 0;
   const childCount = childMatch ? parseInt(childMatch[1]) : 0;
   const total = (adultCount * 80) + (childCount * 40);
   return `ผู้ใหญ่ ${adultCount} คน เด็ก ${childCount} คน\nรวมทั้งหมด ${total} บาทค่ะ`;
+}
+
+// ฟังก์ชันช่วยตอบข้อความ
+function replyText(replyToken, text) {
+  return client.replyMessage(replyToken, {
+    type: 'text',
+    text: text
+  });
 }
 
 // ฟังก์ชันจัดการข้อความ
@@ -54,6 +61,7 @@ function handleEvent(event) {
 
   const text = event.message.text.toLowerCase();
 
+  // คีย์เวิร์ดกลุ่มต่าง ๆ
   const paymentKeywords = ['ชำระ', 'จ่าย', 'โอน', 'วิธีชำระ', 'โอนยังไง', 'จ่ายผ่าน', 'ชำระเงิน'];
   const generalInquiryKeywords = ['สอบถาม', 'ถาม', 'ช่วย', 'สวัสดี', 'hello', 'hi', 'สวัสดีค่ะ', 'สวัสดีครับ'];
   const bookingKeywords = ['จอง', 'ซื้อบัตร', 'ซื้อตั๋ว', 'ช่องทางซื้อ', 'ซื้อตั๋วออนไลน์'];
@@ -68,15 +76,38 @@ function handleEvent(event) {
   const aboutPlaceKeywords = ['คืออะไร', 'ที่เที่ยว', 'รายละเอียด', 'ที่นี่คือ', 'ข้อมูลสถานที่'];
   const roomKeywords = ['ห้องพัก', 'ที่พัก', 'นอน', 'พัก', 'ที่พักผ่อน'];
 
-  // ฟังก์ชันช่วยตอบข้อความ
-  function replyText(replyToken, text) {
-    return client.replyMessage(replyToken, {
-      type: 'text',
-      text: text
-    });
+  // คำถามพิเศษพร้อมคำตอบ
+  const extraQuestions = [
+    {
+      keywords: ['เสียตรงนี้ต้องเสียเพิ่มไหม', 'ต้องเสียเพิ่มไหม', 'เสียเพิ่มไหม', 'มีค่าใช้จ่ายเพิ่มไหม', 'จ่ายเพิ่มไหม'],
+      reply: 'ไม่ต้องเสียเพิ่มแล้วค่ะ'
+    },
+    {
+      keywords: ['โปรนี้มีถึงเมื่อไหร่', 'โปรหมดเมื่อไหร่', 'โปรสิ้นสุดเมื่อไหร่', 'โปรนี้สิ้นสุดเมื่อไหร่', 'โปรโมชั่นหมดเมื่อไหร่'],
+      reply: 'ยังไม่มีกำหนดสิ้นสุดค่ะ'
+    },
+    {
+      keywords: ['สมัครงานได้ไหม', 'รับสมัครงานไหม', 'สมัครงานได้ที่ไหน', 'อยากสมัครงาน', 'มีงานทำไหม'],
+      reply: 'สมัครงานเข้ามาสมัครที่สยามชัยหาดทรายขาวได้เลยค่ะ'
+    },
+    {
+      keywords: ['จำกัดจำนวนไหม', 'มีจำกัดจำนวนไหม', 'จำนวนจำกัดไหม', 'จำกัดผู้เข้าร่วมไหม', 'จำนวนคนจำกัดไหม'],
+      reply: 'ไม่จำกัดจำนวนค่ะ'
+    },
+    {
+      keywords: ['จุดปฐมพยาบาล', 'มีจุดปฐมพยาบาลไหม', 'ปฐมพยาบาล', 'สถานีปฐมพยาบาล', 'ที่ปฐมพยาบาล'],
+      reply: 'มีจุดปฐมพยาบาล ติดต่อที่ทางเข้าได้เลยค่ะ'
+    }
+  ];
+
+  // เช็คคำถามพิเศษก่อน
+  for (const q of extraQuestions) {
+    if (q.keywords.some(k => text.includes(k))) {
+      return replyText(event.replyToken, q.reply);
+    }
   }
 
-  // เช็คแต่ละกลุ่มคำถาม
+  // เช็คคำถามกลุ่มหลัก
   if (paymentKeywords.some(k => text.includes(k))) {
     return client.replyMessage(event.replyToken, {
       type: 'image',
@@ -105,7 +136,7 @@ function handleEvent(event) {
     return replyText(event.replyToken, 'สยามชัยหาดทรายขาวตั้งอยู่ที่นครปฐม กดตามลิ้งค์นี้ได้เลยค่ะ https://g.co/kgs/k1Zv8V2');
   }
 
-  if (swimKeywords.some(k => text.includes(k))) {
+  if (swimKeywords.some(k => text.includes(text))) {
     return replyText(event.replyToken, 'สามารถเล่นน้ำได้ถึงเวลา 18.00 น. หากอยากเล่นน้ำต่อสามารถเล่นที่หลังร้านอาหารสามชัยได้ถึง 21.00 น.ค่ะ');
   }
 
@@ -122,32 +153,4 @@ function handleEvent(event) {
   }
 
   if (aboutPlaceKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สยามชัยหาดทรายขาวเป็นทะเลเทียม มีหาดทรายขาวและทะเลขนาดใหญ่สามารถลงเล่นน้ำได้\nหากต้องการดูรูปภาพหรือรายละเอียดเพิ่มเติม เข้าไปที่เพจ "สยามชัยหาดทรายขาว" ใน Facebook ได้เลยค่ะ');
-  }
-
-  if (roomKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'มีห้องพักให้บริการค่ะ สามารถติดต่อที่เพจ "บ้านเม็ดทราย" บน Facebook ได้เลยค่ะ');
-  }
-
-  if (generalInquiryKeywords.some(k => text.includes(k))) {
-    return replyText(event.replyToken, 'สวัสดีค่ะ สยามชัยหาดทรายขาวยินดีให้บริการ\nสอบถามเพิ่มเติมหรือจองบัตรสามารถพิมพ์ได้เลยนะคะ');
-  }
-
-  // ตรวจสอบคำนวณราคา
-  const priceReply = calculatePrice(text);
-  if (priceReply) {
-    return replyText(event.replyToken, priceReply);
-  }
-
-  // กรณีไม่พบคำตอบที่ตรงกับคำถาม
-  return replyText(event.replyToken, 'สอบถามเพิ่มเติมโทร 081-4462441 ค่ะ');
-}
-
-app.get('/', (req, res) => {
-  res.send('LINE Bot Server is running');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+    return replyText(event.replyToken, 'สยามชัย
