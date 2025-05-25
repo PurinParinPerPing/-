@@ -1,3 +1,44 @@
+require('dotenv').config(); // โหลดตัวแปรจาก .env
+const express = require('express');
+const line = require('@line/bot-sdk');
+const app = express();
+
+// ตั้งค่า config จาก ENV
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
+};
+
+// LINE client
+const client = new line.Client(config);
+
+// Middleware
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  const events = req.body.events;
+  const results = await Promise.all(events.map(handleEvent));
+  res.json(results);
+});
+
+// ฟังก์ชันตอบข้อความ
+function replyText(replyToken, text) {
+  return client.replyMessage(replyToken, {
+    type: 'text',
+    text
+  });
+}
+
+// ดึงชื่อผู้ใช้จาก userId
+async function getUserDisplayName(userId) {
+  try {
+    const profile = await client.getProfile(userId);
+    return profile.displayName || '';
+  } catch (error) {
+    console.error('Error getting user profile:', error);
+    return '';
+  }
+}
+
+// โค้ด handleEvent (จากที่คุณให้มา)
 async function handleEvent(event) {
   console.log('Received event:', JSON.stringify(event, null, 2));
   if (event.type !== 'message' || event.message.type !== 'text') {
@@ -6,22 +47,19 @@ async function handleEvent(event) {
 
   const text = event.message.text.toLowerCase();
 
-  // 0. ทักทายเบื้องต้น
   const greetings = ['สวัสดี', 'ดีครับ', 'ดีค่ะ', 'hello', 'hi', 'hey', 'ทัก', 'มีใครอยู่ไหม'];
   if (greetings.some(g => text.includes(g))) {
     const displayName = event.source?.userId
       ? await getUserDisplayName(event.source.userId)
-      : 'ค่ะ'; // fallback
+      : 'ค่ะ';
     return replyText(event.replyToken, `สวัสดีคุณ${displayName} 😊 มีอะไรให้ช่วยสอบถามได้นะคะ`);
   }
 
-  // 1. เช็คการคำนวณราคา
-  const priceCalcResult = calculatePrice(text);
+  const priceCalcResult = calculatePrice(text); // *หากใช้ฟังก์ชันนี้ต้องนิยามเพิ่ม
   if (priceCalcResult) {
     return replyText(event.replyToken, priceCalcResult + '\nหากต้องการจอง กรุณาแจ้งเพื่อดำเนินการต่อได้เลยค่ะ');
   }
 
-  // 2. คำถามเฉพาะเจาะจง
   const extraQuestions = [
     {
       keywords: ['เสียตรงนี้ต้องเสียเพิ่มไหม', 'ต้องเสียเพิ่มไหม', 'เสียเพิ่มไหม', 'มีค่าใช้จ่ายเพิ่มไหม', 'จ่ายเพิ่ม', 'จ่ายเพิ่มไหม', 'เสียเพิ่ม'],
@@ -50,7 +88,6 @@ async function handleEvent(event) {
     }
   }
 
-  // 3. จอง/ชำระเงิน
   const bookingKeywords = ['ซื้อ', 'จอง', 'ซื้อตั๋ว', 'จองตั๋ว', 'จองบัตร', 'ซื้อตั๋วเข้า'];
   if (bookingKeywords.some(k => text.includes(k))) {
     return replyText(event.replyToken, 'คุณสามารถซื้อบัตรผ่านทาง LINE นี้ได้เลยค่ะ กรุณาแจ้งจำนวนผู้ใหญ่และเด็กที่ต้องการจองค่ะ');
@@ -64,7 +101,6 @@ async function handleEvent(event) {
     });
   }
 
-  // 4. คำถามเกี่ยวกับสถานที่ / เวลา / บริการ
   const checks = [
     {
       keywords: ['เปิด', 'เวลาทำการ', 'กี่โมง'],
@@ -117,17 +153,11 @@ async function handleEvent(event) {
     }
   }
 
-  // 5. fallback
   return replyText(event.replyToken, 'ขออภัยค่ะ ไม่สามารถตอบคำถามนี้ได้ในขณะนี้ หากต้องการสอบถามเพิ่มเติม กรุณาระบุคำถามให้ชัดเจนขึ้นนะคะ');
 }
 
-// เพิ่ม helper เพื่อดึงชื่อผู้ใช้
-async function getUserDisplayName(userId) {
-  try {
-    const profile = await client.getProfile(userId);
-    return profile.displayName || '';
-  } catch (error) {
-    console.error('Error getting user profile:', error);
-    return '';
-  }
-}
+// เปิดพอร์ตสำหรับ Render
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
